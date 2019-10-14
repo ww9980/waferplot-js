@@ -526,6 +526,17 @@ var new_plot = function(zfun, normal_fun, xy_norm, dataset, plotting_columns) {
 	return plot;
 };
 
+var modify_legend =function(zmin,zmax,zdiv){
+    
+	var zindex1 = Math.floor(zmin / zdiv), zindex2 = Math.ceil(zmax / zdiv);
+	var zlevels = [];
+	for (var zi = zindex1; zi <= zindex2; zi++) { zlevels.push(zi * zdiv); }
+    MYAPP.plot.zlevels = zlevels;
+    console.log(zlevels)
+	setup_plot_scene(MYAPP.plot);
+	render();
+};
+
 // Setup the 3D and HUD scenes for the given plot.
 var setup_plot_scene = function(plot) {
 	MYAPP.scene = new_plot3d_scene(plot);
