@@ -189,7 +189,14 @@ var newOptionsOverlayDiv = function() {
 	option_manual.button.addEventListener("click", auto_options_on_click);
 	div.appendChild(div_options);
 
-	var bt_done = createButton("Close", function() { document.body.removeChild(div_overlay); });
+	var bt_done = createButton("Close", function() { 
+    document.body.removeChild(div_overlay); 
+    
+    console.log(input_rows[1].input_text.valueAsNumber);
+    console.log(input_rows[0].input_text.valueAsNumber);
+    console.log(input_rows[2].input_text.value);
+    modify_legend(input_rows[1].input_text.valueAsNumber, input_rows[0].input_text.valueAsNumber, input_rows[2].input_text.value);
+    });
 	div.appendChild(bt_done);
 
 	div.appendChild(newClearDiv());
@@ -204,6 +211,16 @@ var newOptionsOverlayDiv = function() {
 
 	return {div: div_overlay, get: getMap};
 }
+
+var modify_legend =function(zmin,zmax,zdiv){
+    
+	var zindex1 = Math.floor(zmin / zdiv), zindex2 = Math.ceil(zmax / zdiv);
+	var zlevels = [];
+	for (var zi = zindex1; zi <= zindex2; zi++) { zlevels.push(zi * zdiv); }
+    MYAPP.plot.zlevels = zlevels;
+	setup_plot_scene(MYAPP.plot);
+	render();
+};
 
 var enable_output = function(what) {
 	if (container.firstChild) {
