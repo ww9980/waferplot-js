@@ -191,11 +191,18 @@ var newOptionsOverlayDiv = function() {
 
 	var bt_done = createButton("Close", function() { 
     document.body.removeChild(div_overlay); 
-    
-    console.log(input_rows[1].input_text.valueAsNumber);
-    console.log(input_rows[0].input_text.valueAsNumber);
-    console.log(input_rows[2].input_text.value);
-    modify_legend(input_rows[1].input_text.valueAsNumber, input_rows[0].input_text.valueAsNumber, input_rows[2].input_text.value);
+	if (option_auto.button.checked === true)
+	{
+		setup_plot_scene(MYAPP.plot);
+		point_camera(MYAPP.scene);
+		render();
+	}
+	else{
+    //console.log(input_rows[1].input_text.valueAsNumber);
+    //console.log(input_rows[0].input_text.valueAsNumber);
+    //console.log(input_rows[2].input_text.value);
+	modify_legend(input_rows[1].input_text.valueAsNumber, input_rows[0].input_text.valueAsNumber, input_rows[2].input_text.value);
+	}
     });
 	div.appendChild(bt_done);
 
