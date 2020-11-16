@@ -27,6 +27,21 @@ var container = document.getElementById("three-js");
 var renderer_element;
 var data_element;
 var pasteDataOverlayDiv;
+var valueOptionsOverlayDiv;
+var valueOptionsGetter;
+
+MYAPP.getOption = function(option_name) {
+	if (valueOptionsGetter) {
+		var fn = valueOptionsGetter[option_name];
+		if (fn) {
+			return fn();
+		}
+	} else {
+		if (option_name === 'z_auto') {
+			return true;
+		}
+	}
+}
 
 var createButton = function(text, onclick) {
 	var bt = document.createElement("button");
@@ -99,6 +114,119 @@ var pasteData = function() {
 		pasteDataOverlayDiv = newPasteDataOverlayDiv();
 	}
 	document.body.appendChild(pasteDataOverlayDiv);
+};
+
+var newInputRadioBtn = function(name, value, text, checked) {
+	var lab = document.createElement("label");
+	var bt = document.createElement("input");
+	bt.setAttribute("type", "radio");
+	bt.setAttribute("name", name);
+	bt.setAttribute("value", value);
+	if (checked) {
+		bt.setAttribute("checked", "");
+	}
+	lab.appendChild(bt);
+	lab.appendChild(document.createTextNode(text));
+	return {button: bt, label: lab};
+};
+
+var newOptionsTableTr = function(text, input_attributes, disabled) {
+	var tr = document.createElement("tr");
+	var td = document.createElement("td");
+	td.appendChild(document.createTextNode(text));
+	tr.appendChild(td);
+	td = document.createElement("td");
+	var input_text = document.createElement("input");
+	for (var key in input_attributes) {
+		input_text.setAttribute(key, input_attributes[key]);
+	}
+	if (disabled) {
+		input_text.setAttribute("disabled", "");
+	}
+	td.appendChild(input_text);
+	tr.appendChild(td);
+	return {tr: tr, input_text: input_text};
+}
+
+var newOptionsOverlayDiv = function() {
+	var div_overlay = document.createElement("div");
+	div_overlay.className = "overlay";
+
+	var div = document.createElement("div");
+	div.className = "overlay-content";
+
+	var div_options = document.createElement("div");
+	div_options.id = "options-div";
+
+	var option_auto = newInputRadioBtn("z-scale", "auto", "Auto", true);
+	div_options.appendChild(option_auto.label);
+	var option_manual = newInputRadioBtn("z-scale", "manual", "Manual", false);
+	div_options.appendChild(option_manual.label);
+
+	var options_scale_disabled = true;
+
+	var table = document.createElement("table");
+	var input_number_attrs = {type: 'number', step: 'any'};
+	var input_rows = [];
+	input_rows.push(newOptionsTableTr("Maximum", input_number_attrs, options_scale_disabled));
+	input_rows.push(newOptionsTableTr("Minimum", input_number_attrs, options_scale_disabled));
+	input_rows.push(newOptionsTableTr("Intervals", {type: 'text'}, options_scale_disabled));
+	input_rows.forEach(function(row) { table.appendChild(row.tr); });
+	div_options.appendChild(table);
+
+	var auto_options_on_click = function() {
+		var new_disabled_state = (option_auto.button.checked === true);
+		if (new_disabled_state !== options_scale_disabled) {
+			if (new_disabled_state) {
+				input_rows.forEach(function(row) { row.input_text.setAttribute("disabled", ""); });
+			} else {
+				input_rows.forEach(function(row) { row.input_text.removeAttribute("disabled"); });
+			}
+			options_scale_disabled = new_disabled_state;
+		}
+	}
+	option_auto.button.addEventListener("click", auto_options_on_click);
+	option_manual.button.addEventListener("click", auto_options_on_click);
+	div.appendChild(div_options);
+
+	var bt_done = createButton("Close", function() { 
+    document.body.removeChild(div_overlay); 
+	if (option_auto.button.checked === true)
+	{
+		setup_plot_scene(MYAPP.plot);
+		point_camera(MYAPP.scene);
+		render();
+	}
+	else{
+    //console.log(input_rows[1].input_text.valueAsNumber);
+    //console.log(input_rows[0].input_text.valueAsNumber);
+    //console.log(input_rows[2].input_text.value);
+	modify_legend(input_rows[1].input_text.valueAsNumber, input_rows[0].input_text.valueAsNumber, input_rows[2].input_text.value);
+	}
+    });
+	div.appendChild(bt_done);
+
+	div.appendChild(newClearDiv());
+	div_overlay.appendChild(div);
+
+	var getMap = {
+		z_auto: function() { return option_auto.button.checked; },
+		z_max: function() { return input_rows[0].input_text.valueAsNumber; },
+		z_min: function() { return input_rows[1].input_text.valueAsNumber; },
+		z_intervals: function() { var t = input_rows[2].input_text.value; return (t === '' ? null : Number(t)); },
+	};
+
+	return {div: div_overlay, get: getMap};
+}
+
+var modify_legend =function(zmin,zmax,zdiv){
+    
+	var zindex1 = Math.floor(zmin / zdiv), zindex2 = Math.ceil(zmax / zdiv);
+	var zlevels = [];
+	for (var zi = zindex1; zi <= zindex2; zi++) { zlevels.push(zi * zdiv); }
+    MYAPP.plot.zlevels = zlevels;
+	setup_plot_scene(MYAPP.plot);
+	render();
 };
 
 var enable_output = function(what) {
@@ -209,7 +337,7 @@ var viewport = compute_area_size();
 camera = new THREE.PerspectiveCamera( 75, viewport.width/viewport.height, 0.1, 1000 );
 setup_cameras();
 
-var renderer = new THREE.WebGLRenderer({antialias: true, sortObjects: false});
+var renderer = new THREE.WebGLRenderer({antialias: true, sortObjects: false, preserveDrawingBuffer: true});
 renderer.setSize(viewport.width, viewport.height);
 renderer.setClearColor(0xffffff);
 renderer.autoClear = false; // To allow render overlay on top of sprited sphere
@@ -483,16 +611,24 @@ var new_plot = function(zfun, normal_fun, xy_norm, dataset, plotting_columns) {
     }
 
 	var zmin, zmax;
-	for (var i = 0; i <= Nx; i++) {
-		for (var j = 0; j <= Ny; j++) {
-			var z = xyeval(i, j, zfun);
-			zmin = (zmin && zmin <= z) ? zmin : z;
-			zmax = (zmax && zmax >= z) ? zmax : z;
+	var zlevel_number;
+    if (MYAPP.getOption('z_auto')) {
+		for (var i = 0; i <= Nx; i++) {
+			for (var j = 0; j <= Ny; j++) {
+				var z = xyeval(i, j, zfun);
+				zmin = (zmin && zmin <= z) ? zmin : z;
+				zmax = (zmax && zmax >= z) ? zmax : z;
+			}
 		}
+		zlevel_number = 11;
+	} else {
+		zmin = MYAPP.getOption('z_min');
+		zmax = MYAPP.getOption('z_max');
+		var zn = MYAPP.getOption('z_intervals');
+		zlevel_number = (zn ? zn : 11);
 	}
 
-	var ZLEVEL_NUMBER = 11;
-	var zunits = MYAPP.scale_units(zmin, zmax, ZLEVEL_NUMBER);
+	var zunits = MYAPP.scale_units(zmin, zmax, zlevel_number);
 	var zdiv = zunits.div;
 	var zindex1 = Math.floor(zmin / zdiv), zindex2 = Math.ceil(zmax / zdiv);
 	if (zindex2 <= zindex1) zindex2 = zindex1 + 1;
@@ -524,17 +660,6 @@ var new_plot = function(zfun, normal_fun, xy_norm, dataset, plotting_columns) {
 	};
 
 	return plot;
-};
-
-var modify_legend =function(zmin,zmax,zdiv){
-    
-	var zindex1 = Math.floor(zmin / zdiv), zindex2 = Math.ceil(zmax / zdiv);
-	var zlevels = [];
-	for (var zi = zindex1; zi <= zindex2; zi++) { zlevels.push(zi * zdiv); }
-    MYAPP.plot.zlevels = zlevels;
-    console.log(zlevels)
-	setup_plot_scene(MYAPP.plot);
-	render();
 };
 
 // Setup the 3D and HUD scenes for the given plot.
@@ -649,6 +774,42 @@ document.getElementById("show-points-check").addEventListener("change", function
 	setup_plot_scene(MYAPP.plot);
 	render();
 });
+document.getElementById("options-bt").addEventListener("click", function(event) {
+	if (!valueOptionsOverlayDiv) {
+		var options = newOptionsOverlayDiv();
+		valueOptionsOverlayDiv = options.div;
+		valueOptionsGetter = options.get;
+	}
+	document.body.appendChild(valueOptionsOverlayDiv);
+});
+var strDownloadMime = "image/octet-stream";
+document.getElementById("export-bt").addEventListener("click", function(event) {
+    var imgData, imgNode;
+    try{
+        var strMime = "image/jpeg";
+        imgData = renderer.domElement.toDataURL(strMime);
+        
+        saveFile(imgData.replace(strMime, strDownloadMime), ".jpg")
+    }
+    catch (e)
+    {
+        console.log(e);
+        return;
+    }
+});
+var saveFile = function(strData, filename)
+{
+        var link = document.createElement('a');
+        if (typeof link.download === 'string') {
+            document.body.appendChild(link); //Firefox requires the link to be in the body
+            link.download = filename;
+            link.href = strData;
+            link.click();
+            document.body.removeChild(link); //remove the link when done
+        } else {
+            location.replace(uri);
+        }
+}
 
 render();
 animate();
